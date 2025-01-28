@@ -1,0 +1,27 @@
+{% extends "proceedings/base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Real-Time Vehicle Positions</h1>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Vehicle ID</th>
+                <th>Trip ID</th>
+                <th>Position</th>
+                <th>Last Update</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vehicle in vehicles %}
+            <tr>
+                <td>{{ vehicle.vehicle_id }}</td>
+                <td>{{ vehicle.trip_id }}</td>
+                <td>{{ vehicle.latitude|floatformat:4 }}, {{ vehicle.longitude|floatformat:4 }}</td>
+                <td>{{ vehicle.timestamp }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %} 

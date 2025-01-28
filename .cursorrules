@@ -1,0 +1,91 @@
+
+  You are an expert in Python, Django, and scalable web application development.
+
+  Key Principles
+  - Write clear, technical responses with precise Django examples.
+  - Use Django's built-in features and tools wherever possible to leverage its full capabilities.
+  - Prioritize readability and maintainability; follow Django's coding style guide (PEP 8 compliance).
+  - Use descriptive variable and function names; adhere to naming conventions (e.g., lowercase with underscores for functions and variables).
+  - Structure your project in a modular way using Django apps to promote reusability and separation of concerns.
+
+  Django/Python
+  - Use Django’s class-based views (CBVs) for more complex views; prefer function-based views (FBVs) for simpler logic.
+  - Leverage Django’s ORM for database interactions; avoid raw SQL queries unless necessary for performance.
+  - Utilize Django's form and model form classes for form handling and validation.
+  - Follow the MVT (Model-View-Template) pattern strictly for clear separation of concerns.
+
+  Error Handling and Validation
+  - Implement error handling at the view level and use Django's built-in error handling mechanisms.
+  - Use Django's validation framework to validate form and model data.
+  - Prefer try-except blocks for handling exceptions in business logic and views.
+  - Customize error pages (e.g., 404, 500) to improve user experience and provide helpful information.
+  - Use Django signals to decouple error handling and logging from core business logic.
+
+  Dependencies
+  - Django
+
+  Django-Specific Guidelines
+  - Use Django templates for rendering HTML and DRF serializers for JSON responses.
+  - Keep business logic in models and forms; keep views light and focused on request handling.
+  - Use Django's URL dispatcher (urls.py) to define clear and RESTful URL patterns.
+  - Use Django’s built-in tools for testing (unittest and pytest-django) to ensure code quality and reliability.
+  - Leverage Django’s caching framework to optimize performance for frequently accessed data.
+
+  Performance Optimization
+  - Use asynchronous views and background tasks (via Celery) for I/O-bound or long-running operations.
+
+  Key Conventions
+  1. Follow Django's "Convention Over Configuration" principle for reducing boilerplate code.
+  2. Maintain a clear and logical project structure to enhance readability and maintainability.
+  
+  Refer to Django documentation for best practices in views, models, forms, and security considerations.
+  
+
+
+Aim:
+The aim is to create a web application that will enable users to view real time data on bus schedules, routes, and bus locations.
+
+Data:
+GTFS-RT (Realtime) and GTFS (General Transit Feed Specification) data are available and there is an OpenDataDictionary pdf in the media folder describing the data.
+
+Use this structure and extend it as needed.
+
+CyBuses/
+│
+├── manage.py
+├── requirements.txt
+├── .gitignore
+│
+├── config/                     # Project configuration
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   ├── asgi.py
+│   └── wsgi.py
+│
+├── transit/               # Main application
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── views.py
+│   ├── urls.py
+│   ├── forms.py
+│   ├── services/             # Business logic
+│   │   ├── __init__.py
+│   │
+│   ├── templates/
+│   │   └── proceedings/
+│   │       ├── base.html
+│
+└── data/
+    └── media/
+      └── OpenDataDictionary.pdf
+    └── static/
+      └── routes/
+        └── routes.dbf
+        └── routes.prj
+        └── routes.shp
+        └── routes.shx
+      └── stops.csv
+  

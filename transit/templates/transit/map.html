@@ -1,0 +1,77 @@
+{% extends "transit/base.html" %}
+
+{% block content %}
+<div id="map"></div>
+
+<script>
+    const map = L.map('map').setView([35.0, 33.0], 10);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const stopIcon = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/447/447031.png',
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
+        className: 'subtle-stop-marker',
+        opacity: 0.7
+    });
+
+    fetch('{% url "transit:stops-json" %}')
+        .then(response => response.json())
+        .then(data => {
+            data.stops.forEach(stop => {
+                L.marker([stop.lat, stop.lon], {icon: stopIcon, riseOnHover: true, keyboard: false})
+                    .bindPopup(`
+                        <div class="small-popup">
+                            <b>${stop.code}</b><br>
+                            ${stop.description_en}<br>
+                            ${stop.description_el}
+                        </div>
+                    `, {
+                        maxWidth: 150,
+                        className: 'subtle-popup',
+                        autoClose: true,
+                        autoPan: false,
+                        closeButton: false
+                    })
+                    .addTo(map);
+            });
+        });
+
+    fetch('{% url "transit:routes-geojson" %}')
+        .then(response => response.json())
+        .then(data => {
+            L.geoJSON(data, {
+                style: feature => ({
+                    color: feature.properties.color,
+                    weight: 3,
+                    opacity: 0.7
+                })
+            }).bindPopup(feature => `
+                <b>${feature.properties.route_name}</b><br>
+                Direction: ${feature.properties.direction}<br>
+            `).addTo(map);
+        });
+</script>
+
+<style>
+    #map {
+        height: 600px;
+        width: 100%;
+    }
+    .subtle-stop-marker {
+        filter: grayscale(0.8) opacity(0.8);
+    }
+    .small-popup {
+        font-size: 0.8em;
+        line-height: 1.2;
+        color: #666;
+    }
+    .leaflet-popup-content-wrapper {
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+</style>
+{% endblock %} 
