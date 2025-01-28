@@ -4,11 +4,27 @@
 <div id="map"></div>
 
 <script>
-    const map = L.map('map').setView([35.0, 33.0], 10);
+    // Initialize map
+    const map = L.map('map', {
+        minZoom: 8,  // Prevent zooming out too far
+        maxBounds: [  // Restrict panning to Cyprus area
+            [34.0, 32.0],  // Southwest
+            [36.0, 34.5]   // Northeast
+        ]
+    }).setView([35.0, 33.0], 10);
 
+    // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
+
+    // Define icons
+    const busIcon = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        className: 'bus-marker',
+    });
 
     const stopIcon = L.icon({
         iconUrl: 'https://cdn-icons-png.flaticon.com/512/447/447031.png',
@@ -18,48 +34,186 @@
         opacity: 0.7
     });
 
-    fetch('{% url "transit:stops-json" %}')
-        .then(response => response.json())
-        .then(data => {
-            data.stops.forEach(stop => {
-                L.marker([stop.lat, stop.lon], {icon: stopIcon, riseOnHover: true, keyboard: false})
-                    .bindPopup(`
-                        <div class="small-popup">
-                            <b>${stop.code}</b><br>
-                            ${stop.description_en}<br>
-                            ${stop.description_el}
-                        </div>
-                    `, {
-                        maxWidth: 150,
-                        className: 'subtle-popup',
-                        autoClose: true,
-                        autoPan: false,
-                        closeButton: false
-                    })
-                    .addTo(map);
-            });
-        });
+    // State management
+    let currentRouteLayer = null;
+    let currentStopsLayer = L.layerGroup();
+    let vehicleMarkers = {};
+    let routesData = null;
+    let updateTimer = null;
+    let selectedVehicleId = null;
 
+    // Cache routes data
     fetch('{% url "transit:routes-geojson" %}')
         .then(response => response.json())
         .then(data => {
-            L.geoJSON(data, {
-                style: feature => ({
-                    color: feature.properties.color,
-                    weight: 3,
-                    opacity: 0.7
+            routesData = data;
+        })
+        .catch(error => console.error('Error loading routes:', error));
+
+    function showRouteAndStops(routeId) {
+        // Clear previous route and stops
+        if (currentRouteLayer) {
+            map.removeLayer(currentRouteLayer);
+        }
+        currentStopsLayer.clearLayers();
+
+        if (!routeId || !routesData) return;
+
+        // Show the route
+        const route = routesData.features.find(f => f.properties.route_id === routeId);
+        if (route) {
+            currentRouteLayer = L.geoJSON(route, {
+                style: {
+                    color: route.properties.color || '#666666',
+                    weight: 4,
+                    opacity: 0.8
+                }
+            }).addTo(map);
+
+            // Fetch stops for this route
+            fetch(`{% url "transit:stops-json" %}?route_id=${routeId}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Add markers for each stop
+                    data.stops.forEach(stop => {
+                        L.marker([stop.lat, stop.lon], {
+                            icon: stopIcon,
+                            riseOnHover: true
+                        })
+                        .bindPopup(`
+                            <div class="small-popup">
+                                <b>${stop.code}</b> (Stop ${stop.sequence})<br>
+                                ${stop.description_en}<br>
+                                ${stop.description_el}
+                            </div>
+                        `, {
+                            maxWidth: 150,
+                            className: 'subtle-popup',
+                            autoClose: true,
+                            autoPan: false,
+                            closeButton: false
+                        })
+                        .addTo(currentStopsLayer);
+                    });
+
+                    currentStopsLayer.addTo(map);
+
+                    // Fit map to route bounds with padding
+                    if (currentRouteLayer.getBounds) {
+                        map.fitBounds(currentRouteLayer.getBounds(), {
+                            padding: [50, 50]
+                        });
+                    }
                 })
-            }).bindPopup(feature => `
-                <b>${feature.properties.route_name}</b><br>
-                Direction: ${feature.properties.direction}<br>
-            `).addTo(map);
-        });
+                .catch(error => console.error('Error loading stops:', error));
+        }
+    }
+
+    function createVehiclePopup(vehicle) {
+        return `
+            <div class="small-popup">
+                <b>Vehicle ${vehicle.vehicle_id}</b><br>
+                Route: ${vehicle.route}<br>
+                Speed: ${vehicle.speed.toFixed(1)} km/h<br>
+                <button onclick="showRouteAndStops('${vehicle.route}')" class="btn btn-sm btn-primary mt-2">Show Route & Stops</button>
+            </div>
+        `;
+    }
+
+    function updateVehiclePosition(marker, vehicle) {
+        const newLatLng = [vehicle.lat, vehicle.lon];
+        marker.setLatLng(newLatLng);
+        
+        // Update popup content if it's open
+        if (marker.isPopupOpen()) {
+            marker.getPopup().setContent(createVehiclePopup(vehicle));
+        }
+    }
+
+    function updateVehicles() {
+        fetch('{% url "transit:realtime-positions" %}')
+            .then(response => response.json())
+            .then(data => {
+                const currentVehicleIds = new Set(data.vehicles.map(v => v.vehicle_id));
+                
+                // Remove markers for vehicles that no longer exist
+                Object.keys(vehicleMarkers).forEach(id => {
+                    if (!currentVehicleIds.has(id)) {
+                        map.removeLayer(vehicleMarkers[id]);
+                        delete vehicleMarkers[id];
+                    }
+                });
+
+                // Update or create markers for current vehicles
+                data.vehicles.forEach(vehicle => {
+                    const marker = vehicleMarkers[vehicle.vehicle_id];
+                    
+                    if (marker) {
+                        // Update existing marker
+                        updateVehiclePosition(marker, vehicle);
+                    } else {
+                        // Create new marker
+                        const newMarker = L.marker([vehicle.lat, vehicle.lon], {
+                            icon: busIcon,
+                            rotationAngle: vehicle.bearing || 0
+                        });
+
+                        newMarker.bindPopup(createVehiclePopup(vehicle), {
+                            maxWidth: 200
+                        });
+                        
+                        newMarker.on('popupopen', () => {
+                            selectedVehicleId = vehicle.vehicle_id;
+                            // Pause updates while popup is open
+                            if (updateTimer) {
+                                clearInterval(updateTimer);
+                                updateTimer = null;
+                            }
+                        });
+
+                        newMarker.on('popupclose', () => {
+                            selectedVehicleId = null;
+                            // Clear route and stops
+                            if (currentRouteLayer) {
+                                map.removeLayer(currentRouteLayer);
+                                currentRouteLayer = null;
+                            }
+                            currentStopsLayer.clearLayers();
+                            // Resume updates
+                            if (!updateTimer) {
+                                updateTimer = setInterval(updateVehicles, 15000);
+                            }
+                        });
+
+                        vehicleMarkers[vehicle.vehicle_id] = newMarker;
+                        newMarker.addTo(map);
+                    }
+                });
+            })
+            .catch(error => console.error('Error fetching vehicle positions:', error));
+    }
+
+    // Initial update and start interval
+    updateVehicles();
+    updateTimer = setInterval(updateVehicles, 15000);
+
+    // Clean up on page unload
+    window.addEventListener('unload', () => {
+        if (updateTimer) {
+            clearInterval(updateTimer);
+        }
+    });
 </script>
 
 <style>
     #map {
         height: 600px;
         width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .bus-marker {
+        filter: hue-rotate(200deg);
     }
     .subtle-stop-marker {
         filter: grayscale(0.8) opacity(0.8);
@@ -73,5 +227,18 @@
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        border-radius: 0.2rem;
+    }
+    .btn-primary {
+        color: #fff;
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    .mt-2 {
+        margin-top: 0.5rem;
+    }
 </style>
-{% endblock %} 
+{% endblock %}

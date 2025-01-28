@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from transit.models import VehiclePosition
+from transit.models import RealtimeVehicle
 import requests
 from google.transit import gtfs_realtime_pb2
 from django.utils import timezone
@@ -28,12 +28,12 @@ class Command(BaseCommand):
             
             # Process entities
             with transaction.atomic():
-                VehiclePosition.objects.all().delete()
+                RealtimeVehicle.objects.all().delete()
                 
                 created_count = 0
                 for position in positions:
                     try:
-                        VehiclePosition.objects.create(
+                        RealtimeVehicle.objects.create(
                             vehicle_id=position.vehicle_id,
                             license_plate=position.license_plate,
                             latitude=position.latitude,
@@ -42,7 +42,9 @@ class Command(BaseCommand):
                             speed=position.speed,
                             timestamp=position.timestamp,
                             route_id=position.route_id,
-                            trip_id=position.trip_id
+                            trip_id=position.trip_id,
+                            current_status='IN_TRANSIT',  # Default status
+                            current_stop_sequence=0  # Default sequence
                         )
                         created_count += 1
                     except Exception as e:

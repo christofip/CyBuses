@@ -9,7 +9,7 @@ class Command(BaseCommand):
     help = 'Import routes from Shapefile'
 
     def add_arguments(self, parser):
-        parser.add_argument('shp_dir', type=str, help='Directory containing routes.shp')
+        parser.add_argument('shp_path', type=str, help='Full path to routes.shp file')
 
     def parse_time(self, time_str):
         try:
@@ -28,7 +28,7 @@ class Command(BaseCommand):
         return f"#{base_hash:06x}"
 
     def handle(self, *args, **options):
-        shp_path = os.path.join(options['shp_dir'], 'routes.shp')
+        shp_path = options['shp_path']
         
         if not os.path.exists(shp_path):
             self.stdout.write(self.style.ERROR(f'Shapefile not found: {shp_path}'))
@@ -38,32 +38,47 @@ class Command(BaseCommand):
         layer = ds[0]
         
         created_count = 0
+        skipped_count = 0
+        
+        # Add debug output at start
+        self.stdout.write(f"Found {len(layer)} features")
+        self.stdout.write(f"Shapefile fields: {layer.fields}")
+        
         for feature in layer:
             try:
-                # Use LINE_NAME_ as route_id since ID is empty
-                route_id = feature['LINE_NAME_'].value
+                # Use LINE_ID as route_id since it's more stable than LINE_NAME_
+                route_id = feature['LINE_ID'].value
                 if not route_id:
-                    self.stdout.write(self.style.WARNING(f"Skipping feature with empty LINE_NAME_"))
+                    self.stdout.write(self.style.WARNING(f"Skipping feature with empty LINE_ID"))
                     skipped_count += 1
                     continue
 
                 route_data = {
                     'route_id': route_id,
-                    #'line_name': feature['LINE_NAME_'].value,
-                    #'route_name': feature['ROUTE_NAME'].value,
-                    #'direction': feature['DIRECTION'].value,
-                    #'length': self.parse_float(feature['LINE_LENGT'].value),
-                    #'first_stop': feature['FIRST_STOP'].value,
-                    #'last_stop': feature['LAST_STOP_'].value,
-                    #'stops_list': feature['STOPS'].value,
-                    #'geometry': feature.geom.wkt,
+                    'line_name': feature['LINE_NAME'].value,
+                    'route_name': feature['ROUTE_NAME'].value,
+                    'direction': feature['DIRECTION'].value,
+                    'length': self.parse_float(feature['LINE_LENGT'].value),
+                    'first_stop': feature['FIRST_STOP'].value,
+                    'last_stop': feature['LAST_STOP_'].value,
+                    'stops_list': feature['STOPS'].value,
+                    'geometry': feature.geom.wkt,
                     'color': self.generate_color(route_id),
-                    #'weekday_start': self.parse_time(feature['WD_START_H'].value),
-                    #'weekday_end': self.parse_time(feature['WD_LAST_HO'].value),
-                    #'saturday_start': self.parse_time(feature['SAT_START_'].value),
-                    #'saturday_end': self.parse_time(feature['SAT_LAST_H'].value),
-                    #'holiday_start': self.parse_time(feature['HOL_START_'].value),
-                    #'holiday_end': self.parse_time(feature['HOL_LAST_H'].value),
+                    'weekday_start': self.parse_time(feature['WD_START_H'].value),
+                    'weekday_end': self.parse_time(feature['WD_LAST_HO'].value),
+                    'weekday_morning_frequency': feature['WD_MORNING'].value,
+                    'weekday_afternoon_frequency': feature['WD_AFTERNO'].value,
+                    'weekday_trips': feature['WD_COUNT'].value,
+                    'saturday_start': self.parse_time(feature['SAT_START_'].value),
+                    'saturday_end': self.parse_time(feature['SAT_LAST_H'].value),
+                    'saturday_morning_frequency': feature['SAT_MORNIN'].value,
+                    'saturday_afternoon_frequency': feature['SAT_AFTERN'].value,
+                    'saturday_trips': feature['SAT_COUNT'].value,
+                    'holiday_start': self.parse_time(feature['HOL_START_'].value),
+                    'holiday_end': self.parse_time(feature['HOL_LAST_H'].value),
+                    'holiday_morning_frequency': feature['HOL_MORNIN'].value,
+                    'holiday_afternoon_frequency': feature['HOL_AFTERN'].value,
+                    'holiday_trips': feature['HOL_COUNT'].value,
                 }
 
                 Route.objects.update_or_create(
@@ -71,19 +86,20 @@ class Command(BaseCommand):
                     defaults=route_data
                 )
                 created_count += 1
+                
+                if created_count % 10 == 0:  # Progress update every 10 routes
+                    self.stdout.write(f"Processed {created_count} routes...")
 
             except KeyError as e:
                 self.stdout.write(self.style.ERROR(
-                    f"Missing field {str(e)} in feature {feature['ID'].value}"
+                    f"Missing field {str(e)} in feature {feature.get('ID', {}).value}"
                 ))
             except Exception as e:
                 self.stdout.write(self.style.WARNING(
-                    f"Skipping route {route_data['route_id']}: {str(e)}"
+                    f"Error processing route {route_id if 'route_id' in locals() else 'unknown'}: {str(e)}"
                 ))
+                skipped_count += 1
 
         self.stdout.write(self.style.SUCCESS(
-            f'Successfully imported/updated {created_count} routes'
+            f'Successfully imported/updated {created_count} routes ({skipped_count} skipped)'
         ))
-
-        # Add debug output
-        self.stdout.write(f"Shapefile fields: {layer.fields}") 

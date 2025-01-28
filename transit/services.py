@@ -1,5 +1,5 @@
 from django.utils import timezone
-from transit.models import VehiclePosition
+from transit.models import RealtimeVehicle
 from google.transit import gtfs_realtime_pb2
 import requests
 
@@ -17,22 +17,24 @@ def fetch_realtime_data(url):
         raise RuntimeError(f"GTFS-RT fetch failed: {str(e)}")
 
 def process_vehicle_positions(feed):
-    """Process feed entities into VehiclePosition objects"""
+    """Process feed entities into RealtimeVehicle objects"""
     positions = []
     for entity in feed.entity:
         if entity.HasField('vehicle'):
             vp = entity.vehicle
             positions.append(
-                VehiclePosition(
+                RealtimeVehicle(
                     vehicle_id=vp.vehicle.id,
                     license_plate=vp.vehicle.license_plate,
                     latitude=vp.position.latitude,
                     longitude=vp.position.longitude,
                     bearing=vp.position.bearing,
                     speed=vp.position.speed,
-                    timestamp=timezone.datetime.fromtimestamp(vp.timestamp),
+                    timestamp=timezone.make_aware(timezone.datetime.fromtimestamp(vp.timestamp)),
                     route_id=vp.trip.route_id,
-                    trip_id=vp.trip.trip_id
+                    trip_id=vp.trip.trip_id,
+                    current_status='IN_TRANSIT',  # Default status
+                    current_stop_sequence=0  # Default sequence
                 )
             )
-    return positions 
+    return positions
