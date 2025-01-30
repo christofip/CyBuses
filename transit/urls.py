@@ -8,4 +8,5 @@ urlpatterns = [
     path('', MapView.as_view(), name='map'),
     path('stops.json', get_stops_json, name='stops-json'),
     path('routes.geojson', routes_geojson, name='routes-geojson'),
+    path('rt-data/', views.rt_data_view, name='rt-data'),
 ]
