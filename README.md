@@ -26,7 +26,7 @@ This project is currently under active development. Features and documentation w
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/CyBuses.git
+git clone [https://github.com/yourusername/CyBuses.git](https://github.com/christofip/CyBuses)
 cd CyBuses
 ```
 
